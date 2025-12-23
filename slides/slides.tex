@@ -1,0 +1,326 @@
+\documentclass{beamer}
+\usetheme{Madrid} % 你可以根据喜好更改主题，如 Boadilla, Copenhagen 等
+\usecolortheme{default}
+
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+
+% --- 标题页信息 ---
+\title[Conditional BFNs]{Conditional Generation of BFNs and its Advantages over Unconditional BFNs}
+\date{Dec 24, 2025}
+
+\begin{document}
+
+% 1. 标题页
+\begin{frame}
+    \titlepage
+\end{frame}
+
+% 2. 目录页
+\begin{frame}{Overview}
+    \begin{enumerate}
+        \item Introduction
+        \item Framework of BFNs
+        \item Experiments: Dynamically Binarized MNIST
+    \end{enumerate}
+\end{frame}
+
+% 3. 介绍 - 文本
+\begin{frame}{Introduction}
+    BFNs is a novel generative model class that iteratively refines the parameters of independent distributions using Bayesian inference, guided by noisy data samples and neural network outputs. It combines the strengths of:
+    \begin{itemize}
+        \item \textbf{Bayesian inference}: Optimal information integration for individual variables.
+        \item \textbf{Neural networks}: Contextual understanding across variables.
+    \end{itemize}
+    \vfill
+    \textbf{Compared with Diffusion Models}: BFNs operate on distribution parameters rather than noisy data, ensuring continuity even for discrete data. This avoids the need for a predefined forward process.
+    \vfill
+    \textbf{Key idea}: Bayesian updates + neural networks for iterative refinement.
+\end{frame}
+
+% 4. 介绍 - 系统概览图
+\begin{frame}{Introduction}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.6\textwidth]{system_overview.png}
+        \caption{Overview of Bayesian Flow Networks (from original paper)}
+    \end{figure}
+\end{frame}
+
+% 5. 介绍 - 过程描述
+\begin{frame}{Introduction}
+    The figure represents one step of the modelling process of a Bayesian Flow Network. 
+    \begin{itemize}
+        \item The data is a ternary symbol sequence (e.g., 'B' and 'A').
+        \item At each step, the network emits output distribution parameters based on previous input distribution.
+        \item \textbf{Sender/Receiver distributions}: Continuous even for discrete data, created by adding noise.
+        \item \textbf{Bayesian Update}: A sample from the sender is used to update input distribution parameters.
+        \item \textbf{Loss function}: KL divergence from the receiver to the sender distribution (message from Alice to Bob).
+    \end{itemize}
+\end{frame}
+
+% 6. 输入与发送者分布
+\begin{frame}{Input and Sender Distributions}
+    Given $D$-dimensional data $\mathbf{x} = (x^{(1)}, \dots, x^{(D)}) \in \mathcal{X}^D$, let $c \in \mathcal{C}$ be the conditional variable. Let
+    $$\theta = (\theta^{(1)}, \dots, \theta^{(D)})$$
+    be the parameters of a factorised \textbf{input distribution} $p_I(\cdot | \theta)$:
+    \begin{equation}
+        p_I(\mathbf{x} | \theta) = \prod_{d=1}^D p_I(x^{(d)} | \theta^{(d)})
+    \end{equation}
+    Let $p_S(\cdot | \mathbf{x}; \alpha)$ be a similarly factorized \textbf{sender distribution} with $\mathbf{y} = (y^{(1)}, \dots, y^{(D)}) \in \mathcal{Y}^D$:
+    \begin{equation}
+        p_S(\mathbf{y} | \mathbf{x}; \alpha) = \prod_{d=1}^D p_S(y^{(d)} | x^{(d)}; \alpha)
+    \end{equation}
+    where $\alpha \in \mathbb{R}^+$ is an accuracy parameter.
+\end{frame}
+
+% 7. 输出分布
+\begin{frame}{Output Distributions $p_O(\cdot | \theta, c, t)$}
+    Input parameters $\theta$, processing time $t \to$ a neural network $\Psi$.
+    \vfill
+    Output: $\Psi(\theta, c, t) = (\Psi^{(1)}(\theta, c, t), \dots, \Psi^{(D)}(\theta, c, t))$ to parameterize an \textbf{output distribution}:
+    \begin{equation}
+        p_O(\mathbf{x} | \theta, c, t) = \prod_{d=1}^D p_O(x^{(d)} | \Psi^{(d)}(\theta, c, t))
+    \end{equation}
+\end{frame}
+
+% 8. 接收者分布
+\begin{frame}{Receiver Distribution $p_R(\cdot | \theta, t, c, \alpha)$}
+    Given sender distribution $p_S(\cdot | \mathbf{x}; \alpha)$ and output distribution $p_O(\cdot | \theta, c, t)$, the \textbf{receiver distribution} over $\mathcal{Y}^D$ is defined as:
+    \begin{equation}
+        p_R(\mathbf{y} | \theta, c; t, \alpha) = \mathbb{E}_{p_O(\mathbf{x}' | \theta, c; t)} [p_S(\mathbf{y} | \mathbf{x}'; \alpha)]
+    \end{equation}
+\end{frame}
+
+% 9. 贝叶斯更新 1
+\begin{frame}{Bayesian Updates}
+    Given parameters $\theta$ and sender sample $\mathbf{y}$ drawn with accuracy $\alpha$, the \textbf{Bayesian update function} $h$ computes $\theta'$:
+    \begin{equation}
+        \theta' \gets h(\theta, \mathbf{y}, \alpha)
+    \end{equation}
+    The \textbf{Bayesian update distribution} $p_U(\cdot | \theta, \mathbf{x}; \alpha)$ is defined by marginalizing out $\mathbf{y}$:
+    \begin{equation}
+        p_U(\theta' | \theta, \mathbf{x}; \alpha) = \mathbb{E}_{p_S(\mathbf{y}|\mathbf{x};\alpha)} [\delta(\theta' - h(\theta, \mathbf{y}, \alpha))]
+    \end{equation}
+    where $\delta(\cdot - \mathbf{a})$ is the multivariate Dirac delta distribution.
+\end{frame}
+
+% 10. 贝叶斯更新 2
+\begin{frame}{Bayesian Updates}
+    Accuracy is additive: if $\alpha = \alpha_a + \alpha_b$, then
+    \begin{equation}
+        p_U(\theta'' | \theta, \mathbf{x}; \alpha) = \mathbb{E}_{p_U(\theta'|\theta,\mathbf{x};\alpha_a)} [p_U(\theta'' | \theta', \mathbf{x}; \alpha_b)]
+    \end{equation}
+    Probability of observing $\theta_n$ after $n$ samples with accuracies $\alpha_1, \dots, \alpha_n$:
+    \begin{equation}
+        \int \dots \int p_U(\theta_n | \theta_{n-1}, \mathbf{x}; \alpha_n) \dots p_U(\theta_1 | \theta_0, \mathbf{x}; \alpha_1) = p_U \left( \theta_n \bigg| \theta_0, \mathbf{x}; \sum_{i=1}^n \alpha_i \right)
+    \end{equation}
+\end{frame}
+
+% 11. 精度计划
+\begin{frame}{Accuracy Schedule $\beta(t)$}
+    For continuous time $t \in [0, 1]$, let $\alpha(t) > 0$ be the accuracy rate. Define \textbf{accuracy schedule} $\beta(t)$:
+    \begin{equation}
+        \beta(t) = \int_0^t \alpha(t') dt'
+    \end{equation}
+    $\beta(t)$ is monotonically increasing, $\beta(0) = 0$, and:
+    \begin{equation}
+        \frac{d\beta(t)}{dt} = \alpha(t)
+    \end{equation}
+\end{frame}
+
+% 12. 贝叶斯流分布
+\begin{frame}{Bayesian Flow Distribution $p_F(\cdot | \mathbf{x}; t)$}
+    The \textbf{Bayesian flow distribution} $p_F(\cdot | \mathbf{x}; t)$ is the marginal distribution over input parameters at time $t$:
+    \begin{equation}
+        p_F(\theta | \mathbf{x}; t) = p_U(\theta | \theta_0, \mathbf{x}; \beta(t))
+    \end{equation}
+\end{frame}
+
+% 13. 损失函数 1
+\begin{frame}{Loss Function $L(\mathbf{x}|c)$}
+    Consider $n$ sender samples at times $t_i = i/n$. Accuracy at step $i$:
+    \begin{equation}
+        \alpha_i = \beta(t_i) - \beta(t_{i-1})
+    \end{equation}
+    Input parameter sequence is recursively updated:
+    \begin{equation}
+        \theta_i = h(\theta_{i-1}, \mathbf{y}, \alpha_i)
+    \end{equation}
+\end{frame}
+
+% 14. 损失函数 2
+\begin{frame}{Loss Function $L(\mathbf{x}|c)$}
+    $n$-step discrete-time loss $L^n(\mathbf{x})$:
+    \begin{equation}
+        L^n(\mathbf{x}|c) = \mathbb{E}_{p(\theta_1, \dots, \theta_{n-1})} \sum_{i=1}^n D_{KL} (p_S(\cdot | \mathbf{x}; \alpha_i) \| p_R(\cdot | \theta_{i-1}, c; t_{i-1}, \alpha_i))
+    \end{equation}
+    where
+    \begin{equation}
+        p(\theta_1, \dots, \theta_n) = \prod_{i=1}^n p_U(\theta_i | \theta_{i-1}, \mathbf{x}; \alpha_i)
+    \end{equation}
+\end{frame}
+
+% 15. 损失函数 3
+\begin{frame}{Loss Function $L(\mathbf{x}|c)$}
+    \textbf{Reconstruction loss}:
+    \begin{equation}
+        L^r(\mathbf{x}|c) = -\mathbb{E}_{p_F(\theta|\mathbf{x}, 1)} \ln p_O(\mathbf{x} | \theta, c; 1)
+    \end{equation}
+    \textbf{Total loss}:
+    \begin{equation}
+        L(\mathbf{x}|c) = L^n(\mathbf{x}|c) + L^r(\mathbf{x}|c)
+    \end{equation}
+\end{frame}
+
+% 16. 离散时间损失计算技巧
+\begin{frame}{A Trick in Computing Discrete-Time Loss $L^n(\mathbf{x}|c)$}
+    Equation (14) can be rewritten using expectations over $i \sim U\{1, n\}$ and $\theta \sim p_F$:
+    \begin{equation}
+        L^n(\mathbf{x}|c) = n \mathbb{E}_{i \sim U\{1, n\}, p_F(\theta|\mathbf{x}; t_{i-1})} D_{KL} (p_S(\cdot | \mathbf{x}; \alpha_i) \| p_R(\cdot | \theta, c; t_{i-1}, \alpha_i))
+    \end{equation}
+    This allows \textbf{Monte-Carlo sampling} without computing the full $n$-step sum.
+\end{frame}
+
+% 17. 连续时间损失
+\begin{frame}{Continuous-Time Loss $L^\infty(\mathbf{x})$}
+    As $n \to \infty$, let $\epsilon = 1/n$:
+    \begin{equation}
+        L^\infty(\mathbf{x}) = \lim_{\epsilon \to 0} \frac{1}{\epsilon} \mathbb{E}_{t \sim U(\epsilon, 1), p_F(\theta|\mathbf{x}, t-\epsilon)} D_{KL} (p_S \| p_R)
+    \end{equation}
+    This removes noisy gradients and the need to fix $n$ during training.
+\end{frame}
+
+% 18. 连续时间损失 Prop 1
+\begin{frame}{Continuous-Time Loss $L^\infty(\mathbf{x})$}
+    For many sender-receiver pairs:
+    \begin{equation}
+        D_{KL} = \sum_{d=1}^D D_{KL} \left( \mathcal{N}(g(x^{(d)}), C\alpha^{-1}) \| P^{(d)}(\theta, t) * \mathcal{N}(0, C\alpha^{-1}) \right)
+    \end{equation}
+    \textbf{Prop 1}: For continuous $P$ with finite mean/variance, $P * \mathcal{N}(0, \sigma^2) \to \mathcal{N}(E[P], \sigma^2)$ as $\sigma^2 \to \infty$.
+\end{frame}
+
+% 20. 无条件生成结果
+\begin{frame}{MNIST Sample Generation: Unconditional vs. Conditional BFN}
+    \begin{figure}
+        \centering
+        \includegraphics[width=0.5\textwidth]{mnist_unconditional_samples.png}
+        \caption{Samples in original paper (10,000 steps)}
+    \end{figure}
+\end{frame}
+
+% 21. 条件生成结果
+\begin{frame}{Conditional BFN (100 steps)}
+    \begin{columns}
+        \column{0.33\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.9\textwidth]{label_1_100_steps_mnist.png}
+            \caption{1}
+        \end{figure}
+        \column{0.33\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.9\textwidth]{label_5_100_steps_mnist.png}
+            \caption{5}
+        \end{figure}
+        \column{0.33\textwidth}
+        \begin{figure}
+            \centering
+            \includegraphics[width=0.9\textwidth]{label_9_100_steps_mnist.png}
+            \caption{9}
+        \end{figure}
+    \end{columns}
+\end{frame}
+
+% 22. 输入输出分布变化 1
+\begin{frame}{MNIST Input and output distributions}
+    \begin{figure}
+        \centering
+        \includegraphics[width=\textwidth]{mnist_input_output_distributions.png}
+        \caption{Input and output distributions from original paper's unconditional BFN for a test image}
+    \end{figure}
+\end{frame}
+
+% 23. 输入输出分布变化 2 (条件)
+\begin{frame}{MNIST Input and output distributions}
+    \begin{figure}
+        \centering
+        \begin{tabular}{cc}
+            \includegraphics[width=0.45\textwidth]{input_dist_img0.png} &
+            \includegraphics[width=0.45\textwidth]{output_dist_img0.png}
+        \end{tabular}
+        \caption{Input and output distributions from our conditionally trained BFN for a test image with a fixed label}
+    \end{figure}
+\end{frame}
+
+% 23.5
+\begin{frame}{Conditional Generative Models: Setup}
+\textbf{Spaces and Measures:}
+\begin{itemize}
+    \item Data space $(\mathcal{X}, \mathcal{F}_X)$, condition space $(\mathcal{C}, \mathcal{F}_C)$
+    \item Joint measure $\mu_{X,C}$ with marginal $\mu_C$ and conditional measures $\mu_{X|C=c}$
+\end{itemize}
+
+\textbf{Model Families:}
+\begin{itemize}
+    \item Unconditional model family: $\mathcal{P}$
+    \item Conditional model family: 
+    \[
+    \tilde{\mathcal{P}} = \{ \nu_{X|C} : \forall c, \nu_{X|C}(\cdot|c) \in \mathcal{P} \}
+    \]
+\end{itemize}
+
+\textbf{Divergence:} $D(\cdot\|\cdot)$
+\begin{itemize}
+    \item Convex in first argument
+    \item Non-negative and integrable
+\end{itemize}
+
+\end{frame}
+
+%-----------------------------------
+\begin{frame}{Conditional Generative Models: Theorem}
+
+\textbf{Assumptions:}
+\begin{enumerate}
+    \item \textit{Conditional distributions easier to approximate:} 
+    \[
+    \inf_{\nu_X} D(\mu_{X|C=c}\|\nu_X) \le \inf_{\nu_X} D(\mu_X\|\nu_X), \quad \text{a.e. }\mu_C
+    \]
+    \item \textit{Independent conditional choice:} $\forall c\in \mathcal{C}$, $\arg\min_{\nu_X \in \mathcal{P}} D(\mu_{X|C=c}\|\nu_X)$ exists. 
+    \item \textit{Measurability \& integrability:} 
+    \[
+    \int_{\mathcal{C}} D(\mu_{X|C=c}\|\nu_{X|C=c}) \, \mu_C(dc) < \infty
+    \]
+\end{enumerate}
+
+\vspace{2mm}
+\textbf{Theorem:} 
+\[
+\inf_{\nu_{X|C} \in \tilde{\mathcal{P}}} \int_{\mathcal{C}} D(\mu_{X|C=c}\|\nu_{X|C=c}) \, \mu_C(dc)
+\;\le\;
+\inf_{\nu_X \in \mathcal{P}} D(\mu_X \|\nu_X)
+\]
+
+\vspace{2mm}
+\textbf{Intuition:} splitting a complex distribution into simpler conditionals reduces the average divergence, making conditional models typically better.
+
+\end{frame}
+
+% 24. 参考文献
+\begin{frame}{References}
+    \begin{itemize}
+        \item Graves, A., Srivastava, R. K., Atkinson, T., and Gomez, F. (2025). \textit{Bayesian flow networks}.
+    \end{itemize}
+\end{frame}
+
+% 25. 结束页
+\begin{frame}
+    \centering
+    \Huge \textbf{Thank You!}
+\end{frame}
+
+\end{document}
