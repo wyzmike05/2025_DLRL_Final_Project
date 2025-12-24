@@ -18,15 +18,6 @@
     \titlepage
 \end{frame}
 
-% 2. 目录页
-\begin{frame}{Overview}
-    \begin{enumerate}
-        \item Introduction
-        \item Framework of BFNs
-        \item Experiments: Dynamically Binarized MNIST
-    \end{enumerate}
-\end{frame}
-
 % 3. 介绍 - 文本
 \begin{frame}{Introduction}
     BFNs is a novel generative model class that iteratively refines the parameters of independent distributions using Bayesian inference, guided by noisy data samples and neural network outputs. It combines the strengths of:
@@ -184,24 +175,6 @@
     This allows \textbf{Monte-Carlo sampling} without computing the full $n$-step sum.
 \end{frame}
 
-% 17. 连续时间损失
-\begin{frame}{Continuous-Time Loss $L^\infty(\mathbf{x})$}
-    As $n \to \infty$, let $\epsilon = 1/n$:
-    \begin{equation}
-        L^\infty(\mathbf{x}) = \lim_{\epsilon \to 0} \frac{1}{\epsilon} \mathbb{E}_{t \sim U(\epsilon, 1), p_F(\theta|\mathbf{x}, t-\epsilon)} D_{KL} (p_S \| p_R)
-    \end{equation}
-    This removes noisy gradients and the need to fix $n$ during training.
-\end{frame}
-
-% 18. 连续时间损失 Prop 1
-\begin{frame}{Continuous-Time Loss $L^\infty(\mathbf{x})$}
-    For many sender-receiver pairs:
-    \begin{equation}
-        D_{KL} = \sum_{d=1}^D D_{KL} \left( \mathcal{N}(g(x^{(d)}), C\alpha^{-1}) \| P^{(d)}(\theta, t) * \mathcal{N}(0, C\alpha^{-1}) \right)
-    \end{equation}
-    \textbf{Prop 1}: For continuous $P$ with finite mean/variance, $P * \mathcal{N}(0, \sigma^2) \to \mathcal{N}(E[P], \sigma^2)$ as $\sigma^2 \to \infty$.
-\end{frame}
-
 % 20. 无条件生成结果
 \begin{frame}{MNIST Sample Generation: Unconditional vs. Conditional BFN}
     \begin{figure}
@@ -313,7 +286,7 @@
 % 24. 参考文献
 \begin{frame}{References}
     \begin{itemize}
-        \item Graves, A., Srivastava, R. K., Atkinson, T., and Gomez, F. (2025). \textit{Bayesian flow networks}.
+        \item Graves, A., Srivastava, R. K., Atkinson, T., and Gomez, F. (2023). \textit{Bayesian flow networks}.
     \end{itemize}
 \end{frame}
 
